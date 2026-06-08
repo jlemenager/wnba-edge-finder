@@ -288,39 +288,91 @@ def fetch_player_logs(season, progress_cb=None):
 
 def fetch_today_schedule(date_str, progress_cb=None):
     if progress_cb: progress_cb(f"Fetching schedule for {date_str}…")
+    errors = []
+
+    # ── Attempt 1: ESPN API ───────────────────────────────────────────────────
     try:
-        # ESPN public scoreboard API — more reliable than nba_api ScoreboardV2
-        date_compact = date_str.replace("-", "")   # YYYYMMDD format
+        date_compact = date_str.replace("-", "")
         url = (f"https://site.api.espn.com/apis/site/v2/sports/"
-               f"basketball/wnba/scoreboard?dates={date_compact}")
-        r   = requests.get(url, timeout=10)
+               f"basketball/wnba/scoreboard?dates={date_compact}&limit=20")
+        r   = requests.get(url, timeout=15,
+                           headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         data   = r.json()
         events = data.get("events", [])
-        games  = []
-        for event in events:
-            comps = event.get("competitions", [{}])[0]
-            teams = comps.get("competitors", [])
-            if len(teams) < 2:
-                continue
-            # ESPN marks home team with homeAway = "home"
-            home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
-            away = next((t for t in teams if t.get("homeAway") == "away"), teams[1])
-            status = event.get("status", {}).get("type", {}).get("shortDetail", "")
-            games.append({
-                "game_id"        : event.get("id", ""),
-                "game_status"    : status,
-                "home_team_id"   : home["team"]["id"],
-                "home_team_name" : home["team"].get("displayName", ""),
-                "home_team_abbr" : home["team"].get("abbreviation", ""),
-                "away_team_id"   : away["team"]["id"],
-                "away_team_name" : away["team"].get("displayName", ""),
-                "away_team_abbr" : away["team"].get("abbreviation", ""),
-            })
-        return games
+        if events:
+            games = []
+            for event in events:
+                comps = event.get("competitions", [{}])[0]
+                teams = comps.get("competitors", [])
+                if len(teams) < 2:
+                    continue
+                home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
+                away = next((t for t in teams if t.get("homeAway") == "away"), teams[1])
+                status = (event.get("status", {})
+                               .get("type", {})
+                               .get("shortDetail", "Scheduled"))
+                games.append({
+                    "game_id"        : event.get("id", ""),
+                    "game_status"    : status,
+                    "home_team_id"   : home["team"]["id"],
+                    "home_team_name" : home["team"].get("displayName", ""),
+                    "home_team_abbr" : home["team"].get("abbreviation", ""),
+                    "away_team_id"   : away["team"]["id"],
+                    "away_team_name" : away["team"].get("displayName", ""),
+                    "away_team_abbr" : away["team"].get("abbreviation", ""),
+                })
+            if games:
+                return games
+        errors.append(f"ESPN returned 0 events for {date_compact}")
     except Exception as e:
-        return []
+        errors.append(f"ESPN API error: {e}")
 
+    # ── Attempt 2: nba_api LeagueGameLog filtered by date ─────────────────────
+    try:
+        time.sleep(API_DELAY)
+        gl = LeagueGameLog(
+            league_id=WNBA_LEAGUE_ID,
+            season=str(pd.Timestamp(date_str).year),
+            season_type_all_star="Regular Season",
+            player_or_team_abbreviation="T",
+            date_from_nullable=date_str,
+            date_to_nullable=date_str,
+        )
+        df = gl.get_data_frames()[0]
+        df.columns = [c.upper() for c in df.columns]
+        if not df.empty:
+            games = []
+            for gid, grp in df.groupby("GAME_ID"):
+                if len(grp) < 2:
+                    continue
+                home_rows = grp[grp["MATCHUP"].str.contains(r"\bvs\b", case=False, na=False)]
+                away_rows = grp[~grp["MATCHUP"].str.contains(r"\bvs\b", case=False, na=False)]
+                if home_rows.empty or away_rows.empty:
+                    home_rows = grp.iloc[[0]]
+                    away_rows = grp.iloc[[1]]
+                h = home_rows.iloc[0]
+                a = away_rows.iloc[0]
+                games.append({
+                    "game_id"        : str(gid),
+                    "game_status"    : "Scheduled",
+                    "home_team_id"   : str(h["TEAM_ID"]),
+                    "home_team_name" : str(h["TEAM_NAME"]),
+                    "home_team_abbr" : str(h["TEAM_ABBREVIATION"]),
+                    "away_team_id"   : str(a["TEAM_ID"]),
+                    "away_team_name" : str(a["TEAM_NAME"]),
+                    "away_team_abbr" : str(a["TEAM_ABBREVIATION"]),
+                })
+            if games:
+                return games
+        errors.append("nba_api LeagueGameLog returned 0 rows for this date")
+    except Exception as e:
+        errors.append(f"nba_api error: {e}")
+
+    # ── Store errors in session state so UI can show them ─────────────────────
+    st.session_state["schedule_errors"] = errors
+    return []
+  
 def fetch_odds(api_key, progress_cb=None):
     if progress_cb: progress_cb("Fetching live odds from The Odds API…")
     try:
