@@ -31,6 +31,68 @@ warnings.filterwarnings("ignore")
 
 from nba_api.stats.endpoints import ScoreboardV2, LeagueGameLog
 
+# ── Required for loading the trained model ────────────────────────────────────
+from sklearn.isotonic import IsotonicRegression
+from sklearn.pipeline  import Pipeline
+
+def _monte_carlo(pred, res_params, book_spread=None, n=10000):
+    import scipy.stats as _stats
+    df_t, loc, scale = res_params
+    sims     = pred + _stats.t.rvs(df=df_t, loc=loc, scale=scale, size=n)
+    win_prob = float((sims > 0).mean())
+    p5, p95  = float(np.percentile(sims, 5)), float(np.percentile(sims, 95))
+    result   = dict(predicted_margin=pred, win_probability=win_prob, p5=p5, p95=p95)
+    if book_spread is not None:
+        result["ats_prob"] = float((sims > book_spread).mean())
+        result["edge"]     = result["ats_prob"] - 0.524
+    return result
+
+def _ensemble_predict(ensemble, X, feature_cols):
+    Xdf = pd.DataFrame(
+        X.values if isinstance(X, pd.DataFrame) else X,
+        columns=feature_cols)
+    Xnp = Xdf.values
+    w   = ensemble["weights"]
+    return (w["xgb"]   * ensemble["xgb_model"].predict(Xdf)
+          + w["lgb"]   * ensemble["lgb_model"].predict(Xnp)
+          + w["ridge"] * ensemble["ridge_pipe"].predict(Xnp))
+
+def _dual_predict(dual, X, feature_cols):
+    Xdf = pd.DataFrame(
+        X.values if isinstance(X, pd.DataFrame) else X,
+        columns=feature_cols)
+    return dual["m_team"].predict(Xdf) - dual["m_opp"].predict(Xdf)
+
+def _combined_predict(ensemble, dual, X, feature_cols, alpha=0.7):
+    return (alpha * _ensemble_predict(ensemble, X, feature_cols)
+            + (1 - alpha) * _dual_predict(dual, X, feature_cols))
+
+class WNBAPredictor:
+    def __init__(self, ensemble, dual, nr_model, calibrator,
+                 res_params, feature_cols, alpha=0.7):
+        self.ensemble      = ensemble
+        self.dual          = dual
+        self.nr_model      = nr_model
+        self.calibrator    = calibrator
+        self.res_params    = res_params
+        self.feature_cols  = feature_cols
+        self.alpha         = alpha
+
+    def predict(self, feature_dict, book_spread=None):
+        X    = pd.DataFrame([{c: feature_dict.get(c, 0.0)
+                               for c in self.feature_cols}])
+        pred = float(_combined_predict(self.ensemble, self.dual,
+                                       X, self.feature_cols, self.alpha)[0])
+        mc   = _monte_carlo(pred, self.res_params, book_spread)
+        raw  = mc["win_probability"]
+        cal  = float(self.calibrator.predict([raw])[0])
+        return {
+            "predicted_margin"   : round(pred, 2),
+            "win_prob_calibrated": round(cal, 4),
+            "margin_90ci"        : (round(mc["p5"], 1), round(mc["p95"], 1)),
+            "edge_vs_spread"     : round(mc.get("edge", 0.0), 4),
+        }
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS
 # ══════════════════════════════════════════════════════════════════════════════
