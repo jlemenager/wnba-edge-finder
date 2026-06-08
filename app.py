@@ -288,37 +288,38 @@ def fetch_player_logs(season, progress_cb=None):
 
 def fetch_today_schedule(date_str, progress_cb=None):
     if progress_cb: progress_cb(f"Fetching schedule for {date_str}…")
-    time.sleep(API_DELAY)
     try:
-        sb  = ScoreboardV2(league_id=WNBA_LEAGUE_ID, game_date=date_str)
-        dfs = sb.get_data_frames()
-        if not dfs or dfs[0].empty: return []
-        headers = dfs[0]; ls = dfs[1] if len(dfs)>1 else pd.DataFrame()
-        headers.columns = [c.upper() for c in headers.columns]
-        if not ls.empty: ls.columns = [c.upper() for c in ls.columns]
-        games = []
-        for _,row in headers.iterrows():
-            gid   = str(row["GAME_ID"])
-            teams = ls[ls["GAME_ID"]==gid] if not ls.empty else pd.DataFrame()
-            if teams.empty or len(teams)<2: continue
-            home_id = str(row.get("HOME_TEAM_ID", teams.iloc[0]["TEAM_ID"]))
-            hr = teams[teams["TEAM_ID"].astype(str)==home_id]
-            ar = teams[teams["TEAM_ID"].astype(str)!=home_id]
-            if hr.empty or ar.empty:
-                hr,ar = teams.iloc[[0]], teams.iloc[[1]]
-            h,a = hr.iloc[0], ar.iloc[0]
+        # ESPN public scoreboard API — more reliable than nba_api ScoreboardV2
+        date_compact = date_str.replace("-", "")   # YYYYMMDD format
+        url = (f"https://site.api.espn.com/apis/site/v2/sports/"
+               f"basketball/wnba/scoreboard?dates={date_compact}")
+        r   = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data   = r.json()
+        events = data.get("events", [])
+        games  = []
+        for event in events:
+            comps = event.get("competitions", [{}])[0]
+            teams = comps.get("competitors", [])
+            if len(teams) < 2:
+                continue
+            # ESPN marks home team with homeAway = "home"
+            home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
+            away = next((t for t in teams if t.get("homeAway") == "away"), teams[1])
+            status = event.get("status", {}).get("type", {}).get("shortDetail", "")
             games.append({
-                "game_id"        : gid,
-                "game_status"    : str(row.get("GAME_STATUS_TEXT","")),
-                "home_team_id"   : str(h["TEAM_ID"]),
-                "home_team_name" : f"{h.get('TEAM_CITY_NAME','')} {h.get('TEAM_NAME','')}".strip(),
-                "home_team_abbr" : str(h.get("TEAM_ABBREVIATION","")),
-                "away_team_id"   : str(a["TEAM_ID"]),
-                "away_team_name" : f"{a.get('TEAM_CITY_NAME','')} {a.get('TEAM_NAME','')}".strip(),
-                "away_team_abbr" : str(a.get("TEAM_ABBREVIATION","")),
+                "game_id"        : event.get("id", ""),
+                "game_status"    : status,
+                "home_team_id"   : home["team"]["id"],
+                "home_team_name" : home["team"].get("displayName", ""),
+                "home_team_abbr" : home["team"].get("abbreviation", ""),
+                "away_team_id"   : away["team"]["id"],
+                "away_team_name" : away["team"].get("displayName", ""),
+                "away_team_abbr" : away["team"].get("abbreviation", ""),
             })
         return games
-    except: return []
+    except Exception as e:
+        return []
 
 def fetch_odds(api_key, progress_cb=None):
     if progress_cb: progress_cb("Fetching live odds from The Odds API…")
