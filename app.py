@@ -770,7 +770,8 @@ def run_pipeline(api_key, date_str, predictor):
                 "away_win_prob" : ap["win_prob_calibrated"],
                 "margin_90ci"   : ci,
                 "edge"          : edge,
-                "home_spread"   : hs,
+                "home_spread"   : hs,           # raw betting spread (-4.5 = home favored)
+                "book_line"     : book_line,     # same units as model_margin (+4.5 = home wins 4.5)
                 "home_ml"       : odds["home_ml"] if odds else None,
                 "away_ml"       : odds["away_ml"] if odds else None,
                 "signal"        : signal,
@@ -835,8 +836,11 @@ def render_card(g):
     mcls = "pos" if m >= 0 else "neg"
     sign = "+" if m >= 0 else ""
     e_str = f"{edge*100:+.1f}%" if edge is not None else "N/A"
-    s_str = f"{g['home_spread']:+.1f}" if g.get("home_spread") is not None else "N/A"
-    ats   = ("HOME" if m > (g["home_spread"] or 0) else "AWAY") if g.get("home_spread") else "—"
+    # book_line is in same units as model_margin (positive = home wins)
+    # e.g. book spread -4.5 → book_line +4.5 → shows as "+4.5" matching model_margin units
+    bl    = g.get("book_line")
+    s_str = f"{bl:+.1f}" if bl is not None else "N/A"
+    ats   = ("HOME" if m > (bl or 0) else "AWAY") if bl is not None else "—"
     r_str = f"{g['rest_days']}d"
 
     st.markdown(f'<div class="card {sig}">', unsafe_allow_html=True)
@@ -862,7 +866,7 @@ def render_card(g):
             f'<div class="statbox"><div class="statbox-val {ecls}">{e_str}</div>'
             f'<div class="statbox-lbl">Edge vs vig</div></div>'
             f'<div class="statbox"><div class="statbox-val">{s_str}</div>'
-            f'<div class="statbox-lbl">Book spread</div></div>'
+            f'<div class="statbox-lbl">Book margin</div></div>'
             f'<div class="statbox"><div class="statbox-val">{g["home_win_prob"]*100:.0f}%</div>'
             f'<div class="statbox-lbl">Home win%</div></div>'
             f'<div class="statbox"><div class="statbox-val">{ats}</div>'
@@ -1060,6 +1064,7 @@ elif not st.session_state.results:
                         "margin_90ci"   : ci,
                         "edge"          : edge,
                         "home_spread"   : hs,
+                        "book_line"     : -hs if hs is not None else None,
                         "home_ml"       : None,
                         "away_ml"       : None,
                         "signal"        : signal,
@@ -1118,6 +1123,7 @@ else:
             "Matchup"     : f"{r['away_team_name']} @ {r['home_team_name']}",
             "Signal"      : r["signal"],
             "Model margin": f"{r['model_margin']:+.1f}",
+            "Book margin" : f"{r['book_line']:+.1f}" if r.get("book_line") is not None else "—",
             "Book spread" : f"{r['home_spread']:+.1f}" if r.get("home_spread") else "—",
             "Edge vs vig" : f"{r['edge']*100:+.1f}%" if r.get("edge") else "—",
             "Home win%"   : f"{r['home_win_prob']*100:.1f}%",
