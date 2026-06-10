@@ -689,20 +689,6 @@ def run_pipeline(api_key, date_str, predictor):
         # Step 5: Predictions
         st.write("🤖  Step 5 / 5 — Running model predictions...")
 
-        # Diagnostic: show team IDs in logs vs game IDs so mismatch is visible
-        log_ids   = set(tdf["TEAM_ID"].astype(str).unique()) if not tdf.empty else set()
-        game_ids  = set()
-        for g in games:
-            game_ids.add(str(g["home_team_id"]))
-            game_ids.add(str(g["away_team_id"]))
-        matched = log_ids & game_ids
-        if not matched:
-            st.write(f"    ℹ️  Team ID format mismatch detected "
-                     f"(schedule: {sorted(game_ids)[:3]}… vs logs: "
-                     f"{sorted(log_ids)[:3]}…) — using name-based matching")
-        else:
-            st.write(f"    ✓  Team IDs matched directly ({len(matched)} teams)")
-
         elo_map = compute_elo(team_df)
         team_df = derive_stats(team_df)
         opp = (team_df[["GAME_ID","TEAM_ID","PTS","DREB"]]
@@ -713,6 +699,18 @@ def run_pipeline(api_key, date_str, predictor):
             tdf["OREB_PCT"] = tdf["OREB"] / (tdf["OREB"]+tdf["OPP_DREB"]).replace(0, np.nan)
         if "PTS" in tdf.columns:
             tdf["MARGIN"] = tdf["PTS"] - tdf["OPP_PTS"]
+
+        # Diagnostic: tdf is now built, safe to inspect
+        log_ids  = set(tdf["TEAM_ID"].astype(str).unique()) if not tdf.empty else set()
+        game_ids = set()
+        for g in games:
+            game_ids.add(str(g["home_team_id"]))
+            game_ids.add(str(g["away_team_id"]))
+        matched = log_ids & game_ids
+        if not matched:
+            st.write(f"    ℹ️  ID mismatch (ESPN vs nba_api) — using name-based matching")
+        else:
+            st.write(f"    ✓  Team IDs matched directly ({len(matched)} teams)")
 
         # Build name → nba_api TEAM_ID map so elo lookups work even when
         # the schedule used ESPN IDs (which don't match nba_api IDs)
