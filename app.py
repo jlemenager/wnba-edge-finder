@@ -745,7 +745,10 @@ def run_pipeline(api_key, date_str, predictor):
             hs  = odds["home_spread"] if odds else None
             hp  = predictor.predict(home_fv, book_spread=hs)
             ap  = predictor.predict(away_fv, book_spread=-hs if hs else None)
-            model_margin = (hp["predicted_margin"] - ap["predicted_margin"]) / 2
+            # Both hp and ap predict margin from that team's perspective.
+            # ap["predicted_margin"] > 0 means AWAY team wins, which is
+            # negative from home perspective — so we add, not subtract.
+            model_margin = (hp["predicted_margin"] + ap["predicted_margin"]) / 2
             ci    = hp["margin_90ci"]
             edge  = hp.get("edge_vs_spread")
             signal = compute_signal(model_margin, hs, edge, ci[0], ci[1])
@@ -1035,7 +1038,7 @@ elif not st.session_state.results:
                                         0, tdf, player_df, elo_map, home_elo, fc)
                     hp = predictor.predict(home_fv, book_spread=hs)
                     ap = predictor.predict(away_fv, book_spread=-hs if hs else None)
-                    model_margin = (hp["predicted_margin"] - ap["predicted_margin"]) / 2
+                    model_margin = (hp["predicted_margin"] + ap["predicted_margin"]) / 2
                     ci    = hp["margin_90ci"]
                     edge  = hp.get("edge_vs_spread")
                     signal = compute_signal(model_margin, hs, edge, ci[0], ci[1])
