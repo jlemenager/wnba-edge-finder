@@ -743,15 +743,24 @@ def run_pipeline(api_key, date_str, predictor):
             away_fv  = build_fv(g["away_team_id"], g["away_team_name"], g["home_team_name"],
                                 0, tdf, player_df, elo_map, home_elo, feature_cols)
             hs  = odds["home_spread"] if odds else None
-            hp  = predictor.predict(home_fv, book_spread=hs)
-            ap  = predictor.predict(away_fv, book_spread=-hs if hs else None)
-            # Both hp and ap predict margin from that team's perspective.
-            # ap["predicted_margin"] > 0 means AWAY team wins, which is
-            # negative from home perspective — so we add, not subtract.
-            model_margin = (hp["predicted_margin"] + ap["predicted_margin"]) / 2
+
+            # Sign convention fix:
+            # Betting spreads: negative = favored (e.g. home -4.5 = home wins by 4.5)
+            # Model margin:    positive = home wins (e.g. +4.5 = home wins by 4.5)
+            # They're OPPOSITE signs for the same outcome, so we negate hs
+            # before passing it to the model so all comparisons are in the
+            # same units as model_margin.
+            book_line = -hs if hs is not None else None
+
+            hp  = predictor.predict(home_fv, book_spread=book_line)
+            ap  = predictor.predict(away_fv, book_spread=(-book_line if book_line is not None else None))
+
+            # hp > 0 means home wins; ap > 0 means AWAY wins (away perspective)
+            # To get home margin from both: hp stays, ap gets negated
+            model_margin = (hp["predicted_margin"] - ap["predicted_margin"]) / 2
             ci    = hp["margin_90ci"]
             edge  = hp.get("edge_vs_spread")
-            signal = compute_signal(model_margin, hs, edge, ci[0], ci[1])
+            signal = compute_signal(model_margin, book_line, edge, ci[0], ci[1])
             home_tdf = tdf[tdf["TEAM_ID"].astype(str) == str(g["home_team_id"])]
             rest_days = max(1, (datetime.today()-home_tdf["GAME_DATE"].max()).days) if len(home_tdf) > 0 else 3
             results.append({
@@ -1036,12 +1045,13 @@ elif not st.session_state.results:
                                         1, tdf, player_df, elo_map, away_elo, fc)
                     away_fv  = build_fv(g["away_team_id"], g["away_team_name"], g["home_team_name"],
                                         0, tdf, player_df, elo_map, home_elo, fc)
-                    hp = predictor.predict(home_fv, book_spread=hs)
-                    ap = predictor.predict(away_fv, book_spread=-hs if hs else None)
-                    model_margin = (hp["predicted_margin"] + ap["predicted_margin"]) / 2
+                    book_line = -hs if hs is not None else None
+                    hp = predictor.predict(home_fv, book_spread=book_line)
+                    ap = predictor.predict(away_fv, book_spread=(-book_line if book_line is not None else None))
+                    model_margin = (hp["predicted_margin"] - ap["predicted_margin"]) / 2
                     ci    = hp["margin_90ci"]
                     edge  = hp.get("edge_vs_spread")
-                    signal = compute_signal(model_margin, hs, edge, ci[0], ci[1])
+                    signal = compute_signal(model_margin, book_line, edge, ci[0], ci[1])
                     results.append({
                         **g,
                         "model_margin"  : round(model_margin, 2),
