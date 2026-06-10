@@ -84,19 +84,9 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@300;400;600;700;800&display=swap');
 
 /* ── Global base ── */
-html, body, [class*="css"] {
-    font-family: 'Barlow', sans-serif;
-    color: #111827;
-}
+html, body, [class*="css"] { font-family: 'Barlow', sans-serif; }
 
-/* ── Main area: force all Streamlit text black ── */
-.stApp, .main, .block-container { background-color: #ffffff; }
-.stApp p, .stApp span, .stApp div, .stApp label,
-.stApp h1, .stApp h2, .stApp h3, .stApp h4,
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] span { color: #111827 !important; }
-
-/* ── App title and subtitle ── */
+/* ── App title: black ── */
 .app-title {
     font-family: 'Barlow', sans-serif;
     font-weight: 800;
@@ -106,49 +96,41 @@ html, body, [class*="css"] {
     line-height: 1.1;
     margin-bottom: 4px;
 }
-.app-sub  { font-family: 'Space Mono', monospace; font-size: .72rem; color: #374151 !important; letter-spacing: .06em; }
-.run-hint { font-size: .85rem; color: #374151 !important; margin-top: 6px; }
+.app-sub  { font-family: 'Space Mono', monospace; font-size: .72rem; color: #94a3b8; letter-spacing: .06em; }
+.run-hint { font-size: .85rem; color: #64748b; margin-top: 6px; }
 
-/* ── Streamlit native widgets: black text, light background ── */
-.stTextInput input, .stNumberInput input, .stTextArea textarea,
-.stSelectbox div[data-baseweb="select"] *,
-.stDateInput input,
-div[data-baseweb="input"] input,
-div[data-baseweb="select"] div {
-    color: #111827 !important;
-    background-color: #f9fafb !important;
-}
-.stDateInput label, .stSelectbox label, .stTextInput label,
-.stNumberInput label, .stTextArea label, .stToggle label,
-.stRadio label, .stCheckbox label {
-    color: #111827 !important;
-    font-weight: 600 !important;
-}
-div[data-testid="stMetricValue"]  { color: #111827 !important; }
-div[data-testid="stMetricLabel"]  { color: #374151 !important; }
-div[data-testid="stMetricDelta"]  { color: #374151 !important; }
-.stCaption, [data-testid="caption"] { color: #374151 !important; }
-
-/* ── Sidebar: white background, fully black text ── */
+/* ── Sidebar: original dark theme ── */
 section[data-testid="stSidebar"] {
-    background: #ffffff !important;
-    border-right: 1px solid #e2e8f0;
+    background: #080d14 !important;
+    border-right: 1px solid #1e2d3d;
 }
-section[data-testid="stSidebar"] *                    { color: #111827 !important; }
+section[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3                   { color: #000000 !important; font-weight: 700 !important; }
-section[data-testid="stSidebar"] label                { color: #111827 !important; font-weight: 600 !important; }
+section[data-testid="stSidebar"] h3 { color: #f1f5f9 !important; font-weight: 700 !important; }
+section[data-testid="stSidebar"] hr { border-color: #1e2d3d !important; }
+
+/* ── Sidebar input fields: black text on light background ── */
 section[data-testid="stSidebar"] input,
 section[data-testid="stSidebar"] select,
-section[data-testid="stSidebar"] textarea             { color: #111827 !important; background: #f9fafb !important; border: 1px solid #d1d5db !important; }
+section[data-testid="stSidebar"] textarea {
+    color: #111827 !important;
+    background: #f9fafb !important;
+    border: 1px solid #d1d5db !important;
+}
 section[data-testid="stSidebar"] .stSelectbox > div > div,
-section[data-testid="stSidebar"] .stDateInput > div > div { color: #111827 !important; background: #f9fafb !important; }
-section[data-testid="stSidebar"] small,
-section[data-testid="stSidebar"] .stCaption           { color: #374151 !important; }
-section[data-testid="stSidebar"] hr                   { border-color: #e2e8f0 !important; }
-/* Sidebar success message (API key loaded) */
-section[data-testid="stSidebar"] .stAlert p           { color: #111827 !important; }
+section[data-testid="stSidebar"] .stDateInput > div > div,
+section[data-testid="stSidebar"] div[data-baseweb="select"] div,
+section[data-testid="stSidebar"] div[data-baseweb="input"] input {
+    color: #111827 !important;
+    background: #f9fafb !important;
+}
+/* Dropdown option text */
+section[data-testid="stSidebar"] div[role="option"],
+section[data-testid="stSidebar"] div[role="listbox"] * {
+    color: #111827 !important;
+    background: #f9fafb !important;
+}
 
 /* ── Game cards (dark style kept for contrast) ── */
 .card { background: #0f1722; border: 1px solid #1e2d3d; border-radius: 12px; padding: 20px 22px; margin-bottom: 14px; }
@@ -542,9 +524,18 @@ def compute_elo(team_df):
         ratings[oid] = rb + ELO_K*((1-sa)-(1-ea))
     return dict(ratings)
 
-def lineup_strength(team_id, player_df):
+def lineup_strength(team_id, player_df, team_name=""):
     if player_df.empty: return 0.0
+    # Try ID match first
     pdf = player_df[player_df["TEAM_ID"].astype(str) == str(team_id)].copy()
+    # Fall back to name match if empty (ESPN ID vs nba_api ID mismatch)
+    if pdf.empty and team_name and "TEAM_NAME" in player_df.columns:
+        for word in team_name.lower().split():
+            if len(word) < 3: continue
+            mask = player_df["TEAM_NAME"].str.lower().str.contains(word, na=False)
+            if mask.any():
+                pdf = player_df[mask].copy()
+                break
     if pdf.empty: return 0.0
     pdf["MIN_F"] = pdf["MIN"].apply(parse_min) if "MIN" in pdf.columns else 0.0
     for c in ["PTS","REB","AST","STL","BLK","TOV"]:
@@ -563,9 +554,43 @@ def lineup_strength(team_id, player_df):
     w = g["MIN_F"].clip(lower=0.01)
     return float(np.average(g["EMA_C"].fillna(0), weights=w))
 
+def _find_team_rows(team_logs, team_id, team_name):
+    """
+    Look up a team's rows from team_logs.
+    Tries TEAM_ID first (nba_api IDs). If that returns empty — which happens
+    when the schedule came from ESPN and uses different numeric IDs — falls
+    back to a case-insensitive partial name match on TEAM_NAME.
+    """
+    # Try exact ID match first
+    rows = team_logs[team_logs["TEAM_ID"].astype(str) == str(team_id)]
+    if not rows.empty:
+        return rows
+
+    # ID mismatch (e.g. ESPN ID vs nba_api ID) — match by team name
+    if "TEAM_NAME" in team_logs.columns and team_name:
+        # Try each word in the team name for a partial match
+        name_lower = team_name.lower()
+        for word in name_lower.split():
+            if len(word) < 3:
+                continue   # skip short words like "of"
+            mask = team_logs["TEAM_NAME"].str.lower().str.contains(word, na=False)
+            rows = team_logs[mask]
+            if not rows.empty:
+                return rows.sort_values("GAME_DATE")
+
+    # Also try TEAM_ABBREVIATION if available
+    if "TEAM_ABBREVIATION" in team_logs.columns and team_name:
+        abbr = team_name.split()[-1][:3].upper()
+        rows = team_logs[team_logs["TEAM_ABBREVIATION"].str.upper() == abbr]
+        if not rows.empty:
+            return rows.sort_values("GAME_DATE")
+
+    return pd.DataFrame()   # nothing found
+
+
 def build_fv(team_id, team_name, opp_name, is_home,
              team_logs, player_df, elo_map, opp_elo, feature_cols):
-    tl  = team_logs[team_logs["TEAM_ID"].astype(str) == str(team_id)].sort_values("GAME_DATE")
+    tl  = _find_team_rows(team_logs, team_id, team_name).sort_values("GAME_DATE")
     tl  = derive_stats(tl)
     e   = lambda col, sp: ema_last(tl[col].dropna(), sp) if col in tl.columns else 0.0
     rest = max(1, min(7, (datetime.today()-tl["GAME_DATE"].iloc[-1]).days)) if len(tl) > 0 else 3
@@ -575,7 +600,7 @@ def build_fv(team_id, team_name, opp_name, is_home,
     trav = haversine_km(*ac, *hc) if (hc and ac and not is_home) else 0.0
     h2h  = float(tl["MARGIN"].mean()) if "MARGIN" in tl.columns and len(tl) > 0 else 0.0
     elo  = elo_map.get(str(team_id), float(ELO_BASE))
-    ls   = lineup_strength(team_id, player_df)
+    ls   = lineup_strength(team_id, player_df, team_name)
     fv = {
         **{f"EMA{EMA_SHORT}_{c}": e(c, EMA_SHORT) for c in
            ["EFG_PCT","TOV_PCT","OREB_PCT","FTR","PTS","FG_PCT","FG3_PCT","FG3M",
@@ -663,6 +688,21 @@ def run_pipeline(api_key, date_str, predictor):
 
         # Step 5: Predictions
         st.write("🤖  Step 5 / 5 — Running model predictions...")
+
+        # Diagnostic: show team IDs in logs vs game IDs so mismatch is visible
+        log_ids   = set(tdf["TEAM_ID"].astype(str).unique()) if not tdf.empty else set()
+        game_ids  = set()
+        for g in games:
+            game_ids.add(str(g["home_team_id"]))
+            game_ids.add(str(g["away_team_id"]))
+        matched = log_ids & game_ids
+        if not matched:
+            st.write(f"    ℹ️  Team ID format mismatch detected "
+                     f"(schedule: {sorted(game_ids)[:3]}… vs logs: "
+                     f"{sorted(log_ids)[:3]}…) — using name-based matching")
+        else:
+            st.write(f"    ✓  Team IDs matched directly ({len(matched)} teams)")
+
         elo_map = compute_elo(team_df)
         team_df = derive_stats(team_df)
         opp = (team_df[["GAME_ID","TEAM_ID","PTS","DREB"]]
@@ -674,11 +714,32 @@ def run_pipeline(api_key, date_str, predictor):
         if "PTS" in tdf.columns:
             tdf["MARGIN"] = tdf["PTS"] - tdf["OPP_PTS"]
 
+        # Build name → nba_api TEAM_ID map so elo lookups work even when
+        # the schedule used ESPN IDs (which don't match nba_api IDs)
+        name_to_tid = {}
+        if "TEAM_NAME" in tdf.columns:
+            for _, row in tdf[["TEAM_ID","TEAM_NAME"]].drop_duplicates().iterrows():
+                name_to_tid[str(row["TEAM_NAME"]).lower()] = str(row["TEAM_ID"])
+
+        def _elo_for(team_id, team_name):
+            # Try direct ID first
+            v = elo_map.get(str(team_id))
+            if v is not None:
+                return v
+            # Fall back to name lookup
+            tl_rows = _find_team_rows(tdf, team_id, team_name)
+            if not tl_rows.empty:
+                tid = str(tl_rows.iloc[0]["TEAM_ID"])
+                v = elo_map.get(tid)
+                if v is not None:
+                    return v
+            return float(ELO_BASE)
+
         results = []
         for g in games:
             odds     = match_odds(g, odds_map)
-            home_elo = elo_map.get(str(g["home_team_id"]), float(ELO_BASE))
-            away_elo = elo_map.get(str(g["away_team_id"]), float(ELO_BASE))
+            home_elo = _elo_for(g["home_team_id"], g["home_team_name"])
+            away_elo = _elo_for(g["away_team_id"], g["away_team_name"])
             home_fv  = build_fv(g["home_team_id"], g["home_team_name"], g["away_team_name"],
                                 1, tdf, player_df, elo_map, away_elo, feature_cols)
             away_fv  = build_fv(g["away_team_id"], g["away_team_name"], g["home_team_name"],
