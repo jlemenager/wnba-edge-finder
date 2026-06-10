@@ -129,8 +129,32 @@ html,body,[class*="css"]{font-family:'Barlow',sans-serif;}
 .no-games{text-align:center;padding:70px 20px;color:#334155;font-size:1rem;font-family:'Space Mono',monospace;}
 .landing{text-align:center;padding:60px 20px 40px;}
 .landing p{color:#475569;max-width:520px;margin:12px auto 28px;font-size:.95rem;line-height:1.65;}
-section[data-testid="stSidebar"]{background:#080d14!important;border-right:1px solid #1e2d3d;}
-section[data-testid="stSidebar"] *{color:#e2e8f0!important;}
+/* ── Sidebar: white background, black text ── */
+section[data-testid="stSidebar"]{background:#ffffff!important;border-right:1px solid #e2e8f0;}
+section[data-testid="stSidebar"] *{color:#111827!important;}
+section[data-testid="stSidebar"] input,
+section[data-testid="stSidebar"] select,
+section[data-testid="stSidebar"] textarea{
+  color:#111827!important;background:#f9fafb!important;
+  border:1px solid #d1d5db!important;}
+section[data-testid="stSidebar"] label{color:#111827!important;font-weight:600!important;}
+section[data-testid="stSidebar"] .stSelectbox>div>div,
+section[data-testid="stSidebar"] .stDateInput>div>div{
+  color:#111827!important;background:#f9fafb!important;}
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div{color:#111827!important;}
+section[data-testid="stSidebar"] small,
+section[data-testid="stSidebar"] .stCaption{color:#374151!important;}
+section[data-testid="stSidebar"] hr{border-color:#e2e8f0!important;}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3{color:#000000!important;font-weight:700!important;}
+/* ── Main area: ensure title and subtitle are bright ── */
+.app-title{color:#111827!important;}
+.app-sub{color:#374151!important;}
+.run-hint{color:#374151!important;}
+/* ── Buttons ── */
 div[data-testid="stButton"]>button{background:#1a2840;border:1px solid #2e4a6a;color:#93c5fd;
   border-radius:8px;padding:8px 20px;font-family:'Space Mono',monospace;
   font-size:.8rem;letter-spacing:.05em;transition:all .2s;}
@@ -225,29 +249,88 @@ def american_to_implied(odds):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_team_logs(season):
-    time.sleep(API_DELAY)
-    try:
-        gl = LeagueGameLog(league_id=WNBA_LEAGUE_ID, season=season,
-                           season_type_all_star="Regular Season",
-                           player_or_team_abbreviation="T")
-        df = gl.get_data_frames()[0]
-        df.columns   = [c.upper() for c in df.columns]
-        df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
-        df["IS_HOME"]   = df["MATCHUP"].str.contains(r"\bvs\b", case=False).astype(int)
-        return df
-    except: return pd.DataFrame()
+    """
+    Fetch team game logs for the given season.
+    If the current season returns fewer than 10 rows (too early in season,
+    API lag, or rate-limited), automatically blends in the prior season so
+    EMA features are never built from empty data.
+    """
+    MIN_ROWS = 10
+
+    def _pull(s):
+        time.sleep(API_DELAY)
+        try:
+            gl = LeagueGameLog(league_id=WNBA_LEAGUE_ID, season=s,
+                               season_type_all_star="Regular Season",
+                               player_or_team_abbreviation="T")
+            df = gl.get_data_frames()[0]
+            if df.empty:
+                return pd.DataFrame()
+            df.columns      = [c.upper() for c in df.columns]
+            df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+            df["IS_HOME"]   = df["MATCHUP"].str.contains(r"\bvs\b", case=False).astype(int)
+            df["SEASON"]    = s
+            return df
+        except:
+            return pd.DataFrame()
+
+    current = _pull(season)
+
+    if len(current) >= MIN_ROWS:
+        return current
+
+    # Too sparse — blend in prior season as baseline
+    prior_season = str(int(season) - 1)
+    st.write(f"    ⚠️  {season} has only {len(current)} rows — "
+             f"adding {prior_season} as baseline...")
+    prior = _pull(prior_season)
+
+    if prior.empty and current.empty:
+        return pd.DataFrame()
+
+    combined = pd.concat([prior, current], ignore_index=True)
+    combined.sort_values(["TEAM_ID", "GAME_DATE"], inplace=True)
+    combined.reset_index(drop=True, inplace=True)
+    st.write(f"    ✓  Combined: {len(prior):,} ({prior_season}) + "
+             f"{len(current):,} ({season}) rows")
+    return combined
 
 def fetch_player_logs(season):
-    time.sleep(API_DELAY)
-    try:
-        gl = LeagueGameLog(league_id=WNBA_LEAGUE_ID, season=season,
-                           season_type_all_star="Regular Season",
-                           player_or_team_abbreviation="P")
-        df = gl.get_data_frames()[0]
-        df.columns   = [c.upper() for c in df.columns]
-        df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
-        return df
-    except: return pd.DataFrame()
+    """
+    Fetch player game logs. Falls back to prior season if current is sparse.
+    Player logs are used only for lineup strength, so a prior-season
+    baseline is much better than empty data.
+    """
+    MIN_ROWS = 50   # players * games; 50 is a safe minimum
+
+    def _pull(s):
+        time.sleep(API_DELAY)
+        try:
+            gl = LeagueGameLog(league_id=WNBA_LEAGUE_ID, season=s,
+                               season_type_all_star="Regular Season",
+                               player_or_team_abbreviation="P")
+            df = gl.get_data_frames()[0]
+            if df.empty:
+                return pd.DataFrame()
+            df.columns      = [c.upper() for c in df.columns]
+            df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+            df["SEASON"]    = s
+            return df
+        except:
+            return pd.DataFrame()
+
+    current = _pull(season)
+    if len(current) >= MIN_ROWS:
+        return current
+
+    prior_season = str(int(season) - 1)
+    prior = _pull(prior_season)
+    if prior.empty and current.empty:
+        return pd.DataFrame()
+    combined = pd.concat([prior, current], ignore_index=True)
+    combined.sort_values(["PLAYER_ID", "GAME_DATE"], inplace=True)
+    combined.reset_index(drop=True, inplace=True)
+    return combined
 
 def fetch_today_schedule(date_str):
     errors = []
@@ -498,19 +581,27 @@ def run_pipeline(api_key, date_str, predictor):
             return []
         st.write(f"    ✓  Found {len(games)} game{'s' if len(games)!=1 else ''}")
 
-        # Step 2: Team stats
+        # Step 2: Team stats (with automatic prior-season fallback)
         season = str(pd.Timestamp(date_str).year)
         st.write(f"📊  Step 2 / 5 — Fetching {season} team stats...")
         team_df = fetch_team_logs(season)
         if team_df.empty:
-            status.update(label="Could not load team stats.", state="error")
+            # Last resort: try one more year back
+            fallback = str(int(season) - 2)
+            st.write(f"    ⚠️  Both {season} and {str(int(season)-1)} empty — "
+                     f"trying {fallback}...")
+            team_df = fetch_team_logs(fallback)
+        if team_df.empty:
+            status.update(label="Could not load team stats from any season.", state="error")
             return []
-        st.write(f"    ✓  {len(team_df):,} team-game rows loaded")
+        seasons_loaded = sorted(team_df["SEASON"].unique()) if "SEASON" in team_df.columns else [season]
+        st.write(f"    ✓  {len(team_df):,} rows loaded  (seasons: {seasons_loaded})")
 
-        # Step 3: Player stats
+        # Step 3: Player stats (with automatic prior-season fallback)
         st.write("🏃  Step 3 / 5 — Fetching player logs for lineup strength...")
         player_df = fetch_player_logs(season)
-        st.write(f"    ✓  {len(player_df):,} player-game rows loaded")
+        p_seasons = sorted(player_df["SEASON"].unique()) if ("SEASON" in player_df.columns and not player_df.empty) else []
+        st.write(f"    ✓  {len(player_df):,} player rows  (seasons: {p_seasons})")
 
         # Step 4: Odds
         st.write("💰  Step 4 / 5 — Fetching live odds...")
