@@ -82,83 +82,132 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@300;400;600;700;800&display=swap');
-html,body,[class*="css"]{font-family:'Barlow',sans-serif;}
-.app-title{font-family:'Barlow',sans-serif;font-weight:800;font-size:2.6rem;
-           letter-spacing:-.01em;color:#f1f5f9;line-height:1.1;margin-bottom:4px;}
-.app-sub{font-family:'Space Mono',monospace;font-size:.72rem;color:#475569;letter-spacing:.06em;}
-.run-hint{font-size:.85rem;color:#64748b;margin-top:6px;}
-.card{background:#0f1722;border:1px solid #1e2d3d;border-radius:12px;padding:20px 22px;margin-bottom:14px;}
-.card.HIGH  {border-left:4px solid #a855f7;box-shadow:-3px 0 18px rgba(168,85,247,.15);}
-.card.STRONG{border-left:4px solid #0ea5e9;box-shadow:-3px 0 18px rgba(14,165,233,.12);}
-.card.VALUE {border-left:4px solid #16a34a;box-shadow:-3px 0 18px rgba(22,163,74,.12);}
-.card.MARGINAL{border-left:4px solid #d97706;}
-.card.NOISE {border-left:4px solid #334155;opacity:.75;}
-.badge{display:inline-block;padding:3px 11px;border-radius:20px;font-family:'Space Mono',monospace;
-       font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px;}
-.badge.HIGH  {background:rgba(168,85,247,.15);color:#c084fc;}
-.badge.STRONG{background:rgba(14,165,233,.12);color:#38bdf8;}
-.badge.VALUE {background:rgba(22,163,74,.12);color:#4ade80;}
-.badge.MARGINAL{background:rgba(217,119,6,.1);color:#fbbf24;}
-.badge.NOISE {background:#1e2d3d;color:#475569;}
-.matchup{font-family:'Barlow',sans-serif;font-weight:700;font-size:1.45rem;
-         color:#f1f5f9;margin:2px 0 4px;letter-spacing:.01em;}
-.matchup .h{color:#60a5fa;}.matchup .a{color:#f87171;}
-.margin-num{font-family:'Space Mono',monospace;font-size:2rem;font-weight:700;}
-.margin-num.pos{color:#4ade80;}.margin-num.neg{color:#f87171;}
-.margin-sub{font-size:.72rem;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-top:-2px;}
-.statrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-.statbox{background:#0a1018;border:1px solid #1e2d3d;border-radius:7px;padding:8px 12px;min-width:78px;}
-.statbox-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#e2e8f0;}
-.statbox-val.g{color:#4ade80;}.statbox-val.r{color:#f87171;}
-.statbox-lbl{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
-.ci-track{background:#1e2d3d;border-radius:3px;height:5px;position:relative;margin:10px 4px 0;}
-.ci-fill{position:absolute;height:100%;border-radius:3px;background:rgba(96,165,250,.2);}
-.ci-dot{position:absolute;top:-5px;width:15px;height:15px;border-radius:50%;
-        transform:translateX(-50%);border:2px solid #080d14;}
-.ci-model{background:#4ade80;}.ci-spread{background:#f59e0b;}
-.ci-lbls{display:flex;justify-content:space-between;margin-top:5px;
-         font-family:'Space Mono',monospace;font-size:9px;color:#334155;}
-.oddrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;}
-.oddlbl{font-size:10px;color:#334155;text-transform:uppercase;letter-spacing:.07em;}
-.chip{font-family:'Space Mono',monospace;font-size:10px;padding:3px 8px;
-      border-radius:5px;border:1px solid #1e2d3d;color:#64748b;}
-.chip.g{color:#4ade80;border-color:#166534;background:rgba(22,163,74,.08);}
-.chip.r{color:#f87171;border-color:#7f1d1d;background:rgba(248,113,113,.06);}
-.tier-lbl{font-family:'Space Mono',monospace;font-size:.68rem;color:#334155;
-          text-transform:uppercase;letter-spacing:.12em;padding:4px 0 10px;margin-top:6px;}
-.no-games{text-align:center;padding:70px 20px;color:#334155;font-size:1rem;font-family:'Space Mono',monospace;}
-.landing{text-align:center;padding:60px 20px 40px;}
-.landing p{color:#475569;max-width:520px;margin:12px auto 28px;font-size:.95rem;line-height:1.65;}
-/* ── Sidebar: white background, black text ── */
-section[data-testid="stSidebar"]{background:#ffffff!important;border-right:1px solid #e2e8f0;}
-section[data-testid="stSidebar"] *{color:#111827!important;}
-section[data-testid="stSidebar"] input,
-section[data-testid="stSidebar"] select,
-section[data-testid="stSidebar"] textarea{
-  color:#111827!important;background:#f9fafb!important;
-  border:1px solid #d1d5db!important;}
-section[data-testid="stSidebar"] label{color:#111827!important;font-weight:600!important;}
-section[data-testid="stSidebar"] .stSelectbox>div>div,
-section[data-testid="stSidebar"] .stDateInput>div>div{
-  color:#111827!important;background:#f9fafb!important;}
-section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] div{color:#111827!important;}
-section[data-testid="stSidebar"] small,
-section[data-testid="stSidebar"] .stCaption{color:#374151!important;}
-section[data-testid="stSidebar"] hr{border-color:#e2e8f0!important;}
+
+/* ── Global base ── */
+html, body, [class*="css"] {
+    font-family: 'Barlow', sans-serif;
+    color: #111827;
+}
+
+/* ── Main area: force all Streamlit text black ── */
+.stApp, .main, .block-container { background-color: #ffffff; }
+.stApp p, .stApp span, .stApp div, .stApp label,
+.stApp h1, .stApp h2, .stApp h3, .stApp h4,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span { color: #111827 !important; }
+
+/* ── App title and subtitle ── */
+.app-title {
+    font-family: 'Barlow', sans-serif;
+    font-weight: 800;
+    font-size: 2.6rem;
+    letter-spacing: -.01em;
+    color: #111827 !important;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+.app-sub  { font-family: 'Space Mono', monospace; font-size: .72rem; color: #374151 !important; letter-spacing: .06em; }
+.run-hint { font-size: .85rem; color: #374151 !important; margin-top: 6px; }
+
+/* ── Streamlit native widgets: black text, light background ── */
+.stTextInput input, .stNumberInput input, .stTextArea textarea,
+.stSelectbox div[data-baseweb="select"] *,
+.stDateInput input,
+div[data-baseweb="input"] input,
+div[data-baseweb="select"] div {
+    color: #111827 !important;
+    background-color: #f9fafb !important;
+}
+.stDateInput label, .stSelectbox label, .stTextInput label,
+.stNumberInput label, .stTextArea label, .stToggle label,
+.stRadio label, .stCheckbox label {
+    color: #111827 !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stMetricValue"]  { color: #111827 !important; }
+div[data-testid="stMetricLabel"]  { color: #374151 !important; }
+div[data-testid="stMetricDelta"]  { color: #374151 !important; }
+.stCaption, [data-testid="caption"] { color: #374151 !important; }
+
+/* ── Sidebar: white background, fully black text ── */
+section[data-testid="stSidebar"] {
+    background: #ffffff !important;
+    border-right: 1px solid #e2e8f0;
+}
+section[data-testid="stSidebar"] *                    { color: #111827 !important; }
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3{color:#000000!important;font-weight:700!important;}
-/* ── Main area: ensure title and subtitle are bright ── */
-.app-title{color:#111827!important;}
-.app-sub{color:#374151!important;}
-.run-hint{color:#374151!important;}
+section[data-testid="stSidebar"] h3                   { color: #000000 !important; font-weight: 700 !important; }
+section[data-testid="stSidebar"] label                { color: #111827 !important; font-weight: 600 !important; }
+section[data-testid="stSidebar"] input,
+section[data-testid="stSidebar"] select,
+section[data-testid="stSidebar"] textarea             { color: #111827 !important; background: #f9fafb !important; border: 1px solid #d1d5db !important; }
+section[data-testid="stSidebar"] .stSelectbox > div > div,
+section[data-testid="stSidebar"] .stDateInput > div > div { color: #111827 !important; background: #f9fafb !important; }
+section[data-testid="stSidebar"] small,
+section[data-testid="stSidebar"] .stCaption           { color: #374151 !important; }
+section[data-testid="stSidebar"] hr                   { border-color: #e2e8f0 !important; }
+/* Sidebar success message (API key loaded) */
+section[data-testid="stSidebar"] .stAlert p           { color: #111827 !important; }
+
+/* ── Game cards (dark style kept for contrast) ── */
+.card { background: #0f1722; border: 1px solid #1e2d3d; border-radius: 12px; padding: 20px 22px; margin-bottom: 14px; }
+.card.HIGH    { border-left: 4px solid #a855f7; box-shadow: -3px 0 18px rgba(168,85,247,.15); }
+.card.STRONG  { border-left: 4px solid #0ea5e9; box-shadow: -3px 0 18px rgba(14,165,233,.12); }
+.card.VALUE   { border-left: 4px solid #16a34a; box-shadow: -3px 0 18px rgba(22,163,74,.12); }
+.card.MARGINAL{ border-left: 4px solid #d97706; }
+.card.NOISE   { border-left: 4px solid #334155; opacity: .75; }
+.badge { display: inline-block; padding: 3px 11px; border-radius: 20px; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 8px; }
+.badge.HIGH    { background: rgba(168,85,247,.15); color: #c084fc; }
+.badge.STRONG  { background: rgba(14,165,233,.12); color: #38bdf8; }
+.badge.VALUE   { background: rgba(22,163,74,.12);  color: #4ade80; }
+.badge.MARGINAL{ background: rgba(217,119,6,.1);   color: #fbbf24; }
+.badge.NOISE   { background: #1e2d3d; color: #475569; }
+.matchup { font-family: 'Barlow', sans-serif; font-weight: 700; font-size: 1.45rem; color: #f1f5f9; margin: 2px 0 4px; letter-spacing: .01em; }
+.matchup .h { color: #60a5fa; }
+.matchup .a { color: #f87171; }
+.margin-num { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; }
+.margin-num.pos { color: #4ade80; }
+.margin-num.neg { color: #f87171; }
+.margin-sub { font-size: .72rem; color: #475569; text-transform: uppercase; letter-spacing: .08em; margin-top: -2px; }
+.statrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.statbox { background: #0a1018; border: 1px solid #1e2d3d; border-radius: 7px; padding: 8px 12px; min-width: 78px; }
+.statbox-val { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: #e2e8f0; }
+.statbox-val.g { color: #4ade80; }
+.statbox-val.r { color: #f87171; }
+.statbox-lbl { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+.ci-track { background: #1e2d3d; border-radius: 3px; height: 5px; position: relative; margin: 10px 4px 0; }
+.ci-fill  { position: absolute; height: 100%; border-radius: 3px; background: rgba(96,165,250,.2); }
+.ci-dot   { position: absolute; top: -5px; width: 15px; height: 15px; border-radius: 50%; transform: translateX(-50%); border: 2px solid #080d14; }
+.ci-model  { background: #4ade80; }
+.ci-spread { background: #f59e0b; }
+.ci-lbls { display: flex; justify-content: space-between; margin-top: 5px; font-family: 'Space Mono', monospace; font-size: 9px; color: #334155; }
+.oddrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.oddlbl { font-size: 10px; color: #334155; text-transform: uppercase; letter-spacing: .07em; }
+.chip { font-family: 'Space Mono', monospace; font-size: 10px; padding: 3px 8px; border-radius: 5px; border: 1px solid #1e2d3d; color: #64748b; }
+.chip.g { color: #4ade80; border-color: #166534; background: rgba(22,163,74,.08); }
+.chip.r { color: #f87171; border-color: #7f1d1d; background: rgba(248,113,113,.06); }
+.tier-lbl { font-family: 'Space Mono', monospace; font-size: .68rem; color: #374151; text-transform: uppercase; letter-spacing: .12em; padding: 4px 0 10px; margin-top: 6px; }
+.no-games { text-align: center; padding: 70px 20px; color: #374151; font-size: 1rem; font-family: 'Space Mono', monospace; }
+.landing p { color: #374151; max-width: 520px; margin: 12px auto 28px; font-size: .95rem; line-height: 1.65; }
+
 /* ── Buttons ── */
-div[data-testid="stButton"]>button{background:#1a2840;border:1px solid #2e4a6a;color:#93c5fd;
-  border-radius:8px;padding:8px 20px;font-family:'Space Mono',monospace;
-  font-size:.8rem;letter-spacing:.05em;transition:all .2s;}
-div[data-testid="stButton"]>button:hover{background:#1e3048;border-color:#3b82f6;color:#bfdbfe;}
+div[data-testid="stButton"] > button {
+    background: #1a2840; border: 1px solid #2e4a6a; color: #93c5fd;
+    border-radius: 8px; padding: 8px 20px;
+    font-family: 'Space Mono', monospace; font-size: .8rem;
+    letter-spacing: .05em; transition: all .2s;
+}
+div[data-testid="stButton"] > button:hover {
+    background: #1e3048; border-color: #3b82f6; color: #bfdbfe;
+}
+
+/* ── Expanders ── */
+details summary { color: #111827 !important; font-weight: 600; }
+[data-testid="stExpander"] p,
+[data-testid="stExpander"] span,
+[data-testid="stExpander"] td,
+[data-testid="stExpander"] th { color: #111827 !important; }
 </style>
 """, unsafe_allow_html=True)
 
