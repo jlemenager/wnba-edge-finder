@@ -500,7 +500,12 @@ def derive_stats(df):
     if all(c in df.columns for c in ["FGA","OREB","TOV","FTA"]):
         df["PACE_PROXY"] = df["FGA"] - df["OREB"] + df["TOV"] + 0.44*df["FTA"]
     if "PTS" in df.columns and "PACE_PROXY" in df.columns:
-        df["NET_RATING"] = (df["PTS"] / df["PACE_PROXY"].replace(0, np.nan)) * 100
+        # Use true net rating (pts - opp_pts) if opponent data available,
+        # otherwise fall back to offensive rating only
+        if "OPP_PTS" in df.columns:
+            df["NET_RATING"] = ((df["PTS"] - df["OPP_PTS"]) / df["PACE_PROXY"].replace(0, np.nan)) * 100
+        else:
+            df["NET_RATING"] = (df["PTS"] / df["PACE_PROXY"].replace(0, np.nan)) * 100
     return df
 
 def compute_elo(team_df):
@@ -589,17 +594,21 @@ def _find_team_rows(team_logs, team_id, team_name):
 
 
 def build_fv(team_id, team_name, opp_name, is_home,
-             team_logs, player_df, elo_map, opp_elo, feature_cols):
-    tl  = _find_team_rows(team_logs, team_id, team_name).sort_values("GAME_DATE")
-    tl  = derive_stats(tl)
-    e   = lambda col, sp: ema_last(tl[col].dropna(), sp) if col in tl.columns else 0.0
+             team_logs, player_df, team_elo, opp_elo, feature_cols):
+    # Bug fix: receive team_elo directly (pre-computed via _elo_for)
+    # instead of looking up by ESPN team_id in nba_api-keyed elo_map.
+    tl   = _find_team_rows(team_logs, team_id, team_name).sort_values("GAME_DATE")
+    tl   = derive_stats(tl)
+    e    = lambda col, sp: ema_last(tl[col].dropna(), sp) if col in tl.columns else 0.0
     rest = max(1, min(7, (datetime.today()-tl["GAME_DATE"].iloc[-1]).days)) if len(tl) > 0 else 3
     g7   = int((tl["GAME_DATE"] >= pd.Timestamp(datetime.today()-timedelta(days=7))).sum()) if len(tl) > 0 else 0
     hc   = get_coords(opp_name if not is_home else team_name)
     ac   = get_coords(team_name if not is_home else opp_name)
     trav = haversine_km(*ac, *hc) if (hc and ac and not is_home) else 0.0
+    # H2H: use overall season average margin as proxy (true H2H requires
+    # filtering to just this opponent, which needs extra lookup overhead)
     h2h  = float(tl["MARGIN"].mean()) if "MARGIN" in tl.columns and len(tl) > 0 else 0.0
-    elo  = elo_map.get(str(team_id), float(ELO_BASE))
+    elo  = team_elo   # already correctly resolved via _elo_for()
     ls   = lineup_strength(team_id, player_df, team_name)
     fv = {
         **{f"EMA{EMA_SHORT}_{c}": e(c, EMA_SHORT) for c in
@@ -739,9 +748,9 @@ def run_pipeline(api_key, date_str, predictor):
             home_elo = _elo_for(g["home_team_id"], g["home_team_name"])
             away_elo = _elo_for(g["away_team_id"], g["away_team_name"])
             home_fv  = build_fv(g["home_team_id"], g["home_team_name"], g["away_team_name"],
-                                1, tdf, player_df, elo_map, away_elo, feature_cols)
+                                1, tdf, player_df, home_elo, away_elo, feature_cols)
             away_fv  = build_fv(g["away_team_id"], g["away_team_name"], g["home_team_name"],
-                                0, tdf, player_df, elo_map, home_elo, feature_cols)
+                                0, tdf, player_df, away_elo, home_elo, feature_cols)
             hs  = odds["home_spread"] if odds else None
 
             # Sign convention fix:
@@ -761,8 +770,9 @@ def run_pipeline(api_key, date_str, predictor):
             ci    = hp["margin_90ci"]
             edge  = hp.get("edge_vs_spread")
             signal = compute_signal(model_margin, book_line, edge, ci[0], ci[1])
-            home_tdf = tdf[tdf["TEAM_ID"].astype(str) == str(g["home_team_id"])]
-            rest_days = max(1, (datetime.today()-home_tdf["GAME_DATE"].max()).days) if len(home_tdf) > 0 else 3
+            # Use name-based lookup for rest_days (ESPN IDs don't match nba_api IDs)
+            home_tdf  = _find_team_rows(tdf, g["home_team_id"], g["home_team_name"])
+            rest_days = max(1, min(7, (datetime.today()-home_tdf["GAME_DATE"].max()).days)) if len(home_tdf) > 0 else 3
             results.append({
                 **g,
                 "model_margin"  : round(model_margin, 2),
@@ -859,7 +869,7 @@ def render_card(g):
             f'<div class="margin-num {mcls}">{sign}{m:.1f}</div>'
             f'<div class="margin-sub">{fav} favoured by model</div>',
             unsafe_allow_html=True)
-        st.markdown(ci_bar_html(ci[0], ci[1], m, g.get("home_spread")), unsafe_allow_html=True)
+        st.markdown(ci_bar_html(ci[0], ci[1], m, g.get("book_line")), unsafe_allow_html=True)
         ecls = "g" if (edge or 0) > 0.03 else ("r" if (edge or 0) < -0.03 else "")
         st.markdown(
             f'<div class="statrow">'
